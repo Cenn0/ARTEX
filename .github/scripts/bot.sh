@@ -15,7 +15,7 @@ MAX_CHARS=8000
 FOOTER='---
 🤖 automated reply from the repo bot. A human maintainer reads everything. Ping me in any comment with `@artex-bot`.'
 
-log() { echo "[bot] $*"; }
+log() { printf '[bot] %s\n' "$*" >&2; }
 
 [ -z "${DEEPSEEK_API_KEY:-}" ] && { log "DEEPSEEK_API_KEY secret is not set; skipping."; exit 0; }
 
