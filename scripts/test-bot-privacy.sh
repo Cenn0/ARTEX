@@ -8,6 +8,8 @@ cd "$(dirname "$0")/.." || exit 1
 bot=.github/scripts/bot.sh
 MAX_CHARS=8000
 DEEPSEEK_API_KEY=synthetic-test-key
+# These variables are consumed by the dynamically extracted function.
+export MAX_CHARS DEEPSEEK_API_KEY
 log() { printf '[bot] %s\n' "$*" >&2; }
 
 # Load only the function under test, without executing the event dispatch.
