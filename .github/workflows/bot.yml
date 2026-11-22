@@ -25,7 +25,13 @@ jobs:
        github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     steps:
+      # This job has a write-scoped token and a model API secret. Never
+      # execute the pull request's merge/head checkout: PR contents are data,
+      # not trusted workflow code. The bot reads the diff via `gh pr diff`.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: triage or reply
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
