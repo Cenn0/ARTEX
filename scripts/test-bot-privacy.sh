@@ -50,4 +50,26 @@ if grep -Eq 'log "raw (json|response):' "$bot"; then
   exit 1
 fi
 
+# A PR-triggered workflow has access to the bot's model secret on trusted
+# same-repository PRs. Never execute a checkout of the PR merge/head ref.
+# Keep checkout credentials out of the workspace: gh uses GH_TOKEN instead.
+workflow=.github/workflows/bot.yml
+checkout_count=$(grep -c -- '- uses: actions/checkout@' "$workflow")
+[ "$checkout_count" -eq 1 ] || {
+  echo 'unexpected checkout step in privileged bot workflow' >&2
+  exit 1
+}
+grep -Fqx '          ref: ${{ github.event.repository.default_branch }}' "$workflow" || {
+  echo 'bot checkout must pin the trusted default branch' >&2
+  exit 1
+}
+grep -Fqx '          persist-credentials: false' "$workflow" || {
+  echo 'bot checkout must not persist an authenticated git credential' >&2
+  exit 1
+}
+if grep -Eq 'ref:.*(pull_request\\.head|refs/pull/)' "$workflow"; then
+  echo 'untrusted PR checkout in privileged bot workflow' >&2
+  exit 1
+fi
+
 echo 'ok: bot returns no response after API failure and redacts CI diagnostics'
