@@ -67,9 +67,9 @@ grep -Fqx '          persist-credentials: false' "$workflow" || {
   echo 'bot checkout must not persist an authenticated git credential' >&2
   exit 1
 }
-if grep -Eq 'ref:.*(pull_request\\.head|refs/pull/)' "$workflow"; then
+if grep -Eq 'ref:.*(pull_request\.head|refs/pull/)' "$workflow"; then
   echo 'untrusted PR checkout in privileged bot workflow' >&2
   exit 1
 fi
 
-echo 'ok: bot returns no response after API failure and redacts CI diagnostics'
+echo 'ok: bot redacts diagnostics and checks out trusted workflow code'
