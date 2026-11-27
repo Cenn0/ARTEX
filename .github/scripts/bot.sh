@@ -15,7 +15,7 @@ MAX_CHARS=8000
 FOOTER='---
 🤖 automated reply from the repo bot. A human maintainer reads everything. Ping me in any comment with `@artex-bot`.'
 
-log() { echo "[bot] $*"; }
+log() { printf '[bot] %s\n' "$*" >&2; }
 
 [ -z "${DEEPSEEK_API_KEY:-}" ] && { log "DEEPSEEK_API_KEY secret is not set; skipping."; exit 0; }
 
@@ -32,14 +32,16 @@ ask_model() { # $1 = system prompt, $2 = user payload, $3 = "json" for JSON mode
     '{model: "deepseek-flash",
       messages: [{role: "system", content: $sys}, {role: "user", content: $body}],
       max_tokens: 900, temperature: 0} * $extra')
-  resp=$(curl -sS --max-time 120 https://api.deepseek.com/chat/completions \
+  if ! resp=$(curl -fsS --max-time 120 https://api.deepseek.com/chat/completions \
     -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
     -H 'Content-Type: application/json' \
-    -d "$req")
-  if ! jq -e '.choices[0].message.content' <<<"$resp" >/dev/null 2>&1; then
-    log "api call failed, raw response: ${resp:0:300}"
-    echo ""
-    return
+    -d "$req" 2>/dev/null); then
+    log "model API request failed or returned no usable answer; response omitted"
+    return 0
+  fi
+  if ! jq -e '.choices[0].message.content | type == "string" and length > 0' <<<"$resp" >/dev/null 2>&1; then
+    log "model API request failed or returned no usable answer; response omitted"
+    return 0
   fi
   jq -r '.choices[0].message.content' <<<"$resp"
 }
@@ -137,11 +139,11 @@ $body
 Repository file list:
 $(repo_context)" json)
     [ -z "$answer" ] && { log "model returned nothing"; exit 0; }
-    log "raw json: $answer"
+    log "model triage response received"
     comment=$(jq -r '.comment // empty' <<<"$answer" 2>/dev/null)
     reply_labels=$(jq -r 'if (.labels | type) == "array" then (.labels | map(tostring) | join(",")) else "" end' <<<"$answer" 2>/dev/null)
     [ -z "$reply_labels" ] && reply_labels="none"
-    log "parsed labels: $reply_labels"
+    # Only apply_labels may log labels, after its fixed allowlist check.
     if [ "$maintainer_opened" = true ]; then
       log "maintainer issue #$number: labels only, staying silent"
       apply_labels "$number" "$reply_labels"
