@@ -21,6 +21,8 @@ curl() {
   case "$MOCK_CURL_RESPONSE" in
     error) printf '%s\n' '{"error":{"message":"SYNTHETIC_PRIVATE_MARKER"}}' ;;
     valid) printf '%s\n' '{"choices":[{"message":{"content":"synthetic safe reply"}}]}' ;;
+    transport) printf '%s\n' '{"choices":[{"message":{"content":"SYNTHETIC_PRIVATE_MARKER"}}]}'; printf '%s\n' SYNTHETIC_PRIVATE_MARKER >&2; return 22 ;;
+    nonstring) printf '%s\n' '{"choices":[{"message":{"content":{"value":"SYNTHETIC_PRIVATE_MARKER"}}}]}' ;;
     *) return 22 ;;
   esac
 }
@@ -40,6 +42,22 @@ grep -Fq 'response omitted' "$stderr_file" || {
   exit 1
 }
 
+for MOCK_CURL_RESPONSE in transport nonstring; do
+  output=$(ask_model 'system' 'user payload' 2>"$stderr_file") || {
+    echo 'model failure must return normally with no answer' >&2
+    exit 1
+  }
+  [ -z "$output" ] || { echo 'invalid response became a comment' >&2; exit 1; }
+  if grep -Fq 'SYNTHETIC_PRIVATE_MARKER' "$stderr_file"; then
+    echo 'untrusted API failure leaked to public diagnostics' >&2
+    exit 1
+  fi
+  grep -Fq 'response omitted' "$stderr_file" || {
+    echo 'sanitized API error diagnostic missing' >&2
+    exit 1
+  }
+done
+
 MOCK_CURL_RESPONSE=valid
 output=$(ask_model 'system' 'user payload' 2>"$stderr_file")
 [ "$output" = 'synthetic safe reply' ] || { echo 'normal model answer changed' >&2; exit 1; }
@@ -47,6 +65,12 @@ output=$(ask_model 'system' 'user payload' 2>"$stderr_file")
 # The event handler must never echo the complete model response into logs.
 if grep -Eq 'log "raw (json|response):' "$bot"; then
   echo 'untrusted model output logging reintroduced' >&2
+  exit 1
+fi
+
+# Raw parsed label values are model-controlled until apply_labels filters them.
+if grep -Eq 'log .*\$\{?reply_labels' "$bot"; then
+  echo 'unfiltered model label logging reintroduced' >&2
   exit 1
 fi
 
